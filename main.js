@@ -4,6 +4,9 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
+const copyDate = "2025-12-23";
+const targetDate = "2025-12-07";
+
 const merger = new PDFMerger();
 const documentsDir = path.join(__dirname, "documents");
 const outputFile = path.join(__dirname, "merged.pdf");
@@ -76,9 +79,9 @@ async function downloadDocument(page, context, documentCode) {
   const page = await context.newPage();
 
   await login(page);
-  const codes = await getDocumentsCodes(page, "2025-12-23");
+  const codes = await getDocumentsCodes(page, copyDate);
   for (const code of codes) {
-    await copyDocument(page, "2025-12-07", code);
+    await copyDocument(page, targetDate, code);
     await signDocument(page);
     await downloadDocument(page, context, code);
   }
