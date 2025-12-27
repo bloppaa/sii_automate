@@ -13,7 +13,10 @@
     "@types/node": "^25.0.3"
   },
   "dependencies": {
+    "cli-progress": "^3.12.0",
+    "colors": "^1.4.0",
     "dotenv": "^17.2.3",
-    "pdf-merger-js": "^5.1.2"
+    "pdf-merger-js": "^5.1.2",
+    "tqdm": "^2.0.3"
   }
 }

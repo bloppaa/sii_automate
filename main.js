@@ -2,10 +2,15 @@ const { chromium } = require("playwright");
 const PDFMerger = require("pdf-merger-js").default;
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config();
+const cliProgress = require("cli-progress");
+const colors = require("colors");
+require("dotenv").config({ quiet: true });
 
-const copyDate = "2025-12-23";
-const targetDate = "2025-12-07";
+const config = {
+  copyDate: "2025-12-20",
+  targetDate: "2025-12-27",
+  ignoreNames: ["julieta", "claudia"],
+};
 
 const merger = new PDFMerger();
 const documentsDir = path.join(__dirname, "documents");
@@ -27,28 +32,47 @@ async function login(page) {
   await page.getByRole("button", { name: "Ingresar", exact: true }).click();
 }
 
-async function getDocumentsCodes(page, copyDate) {
+async function getDocumentsCodes(page) {
   await page.waitForLoadState();
   await page.goto(
-    DOCUMENT_LIST_URL + `&FEC_DESDE=${copyDate}&FEC_HASTA=${copyDate}`
+    DOCUMENT_LIST_URL +
+      `&FEC_DESDE=${config.copyDate}&FEC_HASTA=${config.copyDate}`
   );
-  const rows = await page.locator("td.sorting_1 a").all();
-  const urls = await Promise.all(rows.map((row) => row.getAttribute("href")));
+  const rows = await page.locator("#tablaDatos tr:has(td)").all();
+  const rowsWithNames = await Promise.all(
+    rows.map(async (row) => {
+      const name = (await row.locator("td").nth(2).textContent())
+        .split(" ")[0]
+        .toLowerCase()
+        .trim();
+      return { row, name };
+    })
+  );
+  const filteredRows = rowsWithNames
+    .filter((row) => {
+      return !config.ignoreNames.includes(row.name.toLowerCase());
+    })
+    .map((row) => row.row);
+  const urls = await Promise.all(
+    filteredRows.map((row) =>
+      row.locator("td").first().locator("a").getAttribute("href")
+    )
+  );
   return urls.map((url) => DOCUMENT_CODE_REGEX.exec(url)[1]);
 }
 
-async function copyDocument(page, targetDate, documentCode) {
+async function copyDocument(page, documentCode) {
   await page.goto(DOCUMENT_URL + documentCode);
   await page.bringToFront();
   await page
     .locator('select[name="cbo_dia_boleta"]')
-    .selectOption(targetDate.split("-")[2]);
+    .selectOption(config.targetDate.split("-")[2]);
   await page
     .locator('select[name="cbo_mes_boleta"]')
-    .selectOption(targetDate.split("-")[1]);
+    .selectOption(config.targetDate.split("-")[1]);
   await page
     .locator('select[name="cbo_anio_boleta"]')
-    .selectOption(targetDate.split("-")[0]);
+    .selectOption(config.targetDate.split("-")[0]);
   await page.locator('input[name="EFXP_CIUDAD_RECEP"]').fill("OVALLE");
 }
 
@@ -79,12 +103,30 @@ async function downloadDocument(page, context, documentCode) {
   const page = await context.newPage();
 
   await login(page);
-  const codes = await getDocumentsCodes(page, copyDate);
+  const codes = await getDocumentsCodes(page);
+  console.log("Procesando documentos...");
+  const progressBar = new cliProgress.SingleBar(
+    {
+      format:
+        "Progeso |" +
+        colors.cyan("{bar}") +
+        "| {percentage}% || {value}/{total} Documentos || ETA: {eta_formatted}",
+      barCompleteChar: "\u2588",
+      barIncompleteChar: "\u2591",
+      hideCursor: true,
+    },
+    cliProgress.Presets.shades_classic
+  );
+
+  progressBar.start(codes.length, 0);
+
   for (const code of codes) {
-    await copyDocument(page, targetDate, code);
+    await copyDocument(page, code);
     await signDocument(page);
     await downloadDocument(page, context, code);
+    progressBar.increment();
   }
+  progressBar.stop();
   await browser.close();
 
   const files = fs.readdirSync(documentsDir);
