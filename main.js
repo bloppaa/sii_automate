@@ -103,12 +103,13 @@ async function downloadDocument(page, context, documentCode) {
   const page = await context.newPage();
 
   await login(page);
+
   const codes = await getDocumentsCodes(page);
   console.log("Procesando documentos...");
   const progressBar = new cliProgress.SingleBar(
     {
       format:
-        "Progeso |" +
+        "Progreso |" +
         colors.cyan("{bar}") +
         "| {percentage}% || {value}/{total} Documentos || ETA: {eta_formatted}",
       barCompleteChar: "\u2588",
@@ -117,7 +118,6 @@ async function downloadDocument(page, context, documentCode) {
     },
     cliProgress.Presets.shades_classic
   );
-
   progressBar.start(codes.length, 0);
 
   for (const code of codes) {
@@ -127,6 +127,7 @@ async function downloadDocument(page, context, documentCode) {
     progressBar.increment();
   }
   progressBar.stop();
+
   await browser.close();
 
   const files = fs.readdirSync(documentsDir);
