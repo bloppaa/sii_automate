@@ -7,9 +7,9 @@ const colors = require("colors");
 require("dotenv").config({ quiet: true });
 
 const config = {
-  copyDate: "2025-12-20",
-  targetDate: "2025-12-27",
-  ignoreNames: ["julieta", "claudia"],
+  copyDate: "2025-12-22",
+  targetDate: "2025-12-29",
+  ignoreNames: [],
 };
 
 const merger = new PDFMerger();
