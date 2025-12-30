@@ -7,8 +7,8 @@ const colors = require("colors");
 require("dotenv").config({ quiet: true });
 
 const config = {
-  copyDate: "2025-12-22",
-  targetDate: "2025-12-29",
+  copyDate: "2025-12-23",
+  targetDate: "2025-12-30",
   ignoreNames: [],
 };
 
@@ -94,7 +94,7 @@ async function downloadDocument(page, context, documentCode) {
   const pdfUrl = newPage.url();
   const response = await newPage.request.get(pdfUrl);
   const buffer = await response.body();
-  fs.writeFileSync(`documents/${documentCode}.pdf`, buffer);
+  fs.writeFileSync(`${documentsDir}/${documentCode}.pdf`, buffer);
 }
 
 (async () => {
@@ -109,9 +109,9 @@ async function downloadDocument(page, context, documentCode) {
   const progressBar = new cliProgress.SingleBar(
     {
       format:
-        "Progreso |" +
+        "Progreso [" +
         colors.cyan("{bar}") +
-        "| {percentage}% || {value}/{total} Documentos || ETA: {eta_formatted}",
+        "] {percentage}% || {value}/{total} Documentos || ETA: {eta_formatted}",
       barCompleteChar: "\u2588",
       barIncompleteChar: "\u2591",
       hideCursor: true,
@@ -135,8 +135,15 @@ async function downloadDocument(page, context, documentCode) {
 
   for (const file of pdfFiles) {
     const filePath = path.join(documentsDir, file);
-    await merger.add(filePath);
+    await merger.add(filePath, 1);
   }
 
   await merger.save(outputFile);
+
+  for (const file of files) {
+    const filePath = path.join(documentsDir, file);
+    if (fs.lstatSync(filePath).isFile()) {
+      fs.unlinkSync(filePath);
+    }
+  }
 })();
