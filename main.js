@@ -4,13 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const cliProgress = require("cli-progress");
 const colors = require("colors");
+const prompt = require("prompt-sync")();
 require("dotenv").config({ quiet: true });
-
-const config = {
-  copyDate: "2025-12-23",
-  targetDate: "2025-12-30",
-  ignoreNames: [],
-};
 
 const merger = new PDFMerger();
 const documentsDir = path.join(__dirname, "documents");
@@ -32,13 +27,13 @@ async function login(page) {
   await page.getByRole("button", { name: "Ingresar", exact: true }).click();
 }
 
-async function getDocumentsCodes(page) {
+async function getDocumentsCodes(page, copyDate, ignoreNames) {
   await page.waitForLoadState();
   await page.goto(
-    DOCUMENT_LIST_URL +
-      `&FEC_DESDE=${config.copyDate}&FEC_HASTA=${config.copyDate}`
+    DOCUMENT_LIST_URL + `&FEC_DESDE=${copyDate}&FEC_HASTA=${copyDate}`
   );
   const rows = await page.locator("#tablaDatos tr:has(td)").all();
+
   const rowsWithNames = await Promise.all(
     rows.map(async (row) => {
       const name = (await row.locator("td").nth(2).textContent())
@@ -48,31 +43,34 @@ async function getDocumentsCodes(page) {
       return { row, name };
     })
   );
+
   const filteredRows = rowsWithNames
     .filter((row) => {
-      return !config.ignoreNames.includes(row.name.toLowerCase());
+      return !ignoreNames.includes(row.name.toLowerCase());
     })
     .map((row) => row.row);
+
   const urls = await Promise.all(
     filteredRows.map((row) =>
       row.locator("td").first().locator("a").getAttribute("href")
     )
   );
+
   return urls.map((url) => DOCUMENT_CODE_REGEX.exec(url)[1]);
 }
 
-async function copyDocument(page, documentCode) {
+async function copyDocument(page, documentCode, targetDate) {
   await page.goto(DOCUMENT_URL + documentCode);
   await page.bringToFront();
   await page
     .locator('select[name="cbo_dia_boleta"]')
-    .selectOption(config.targetDate.split("-")[2]);
+    .selectOption(targetDate.split("-")[2]);
   await page
     .locator('select[name="cbo_mes_boleta"]')
-    .selectOption(config.targetDate.split("-")[1]);
+    .selectOption(targetDate.split("-")[1]);
   await page
     .locator('select[name="cbo_anio_boleta"]')
-    .selectOption(config.targetDate.split("-")[0]);
+    .selectOption(targetDate.split("-")[0]);
   await page.locator('input[name="EFXP_CIUDAD_RECEP"]').fill("OVALLE");
 }
 
@@ -97,14 +95,76 @@ async function downloadDocument(page, context, documentCode) {
   fs.writeFileSync(`${documentsDir}/${documentCode}.pdf`, buffer);
 }
 
+function configValues() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  let tomorrowDate = tomorrow.toLocaleDateString("en-CA");
+  const tomorrowInput = prompt(`Mañana: ${tomorrowDate} ([y]/n) `);
+  while (true) {
+    if (tomorrowInput === "y" || tomorrowInput === "") {
+      break;
+    } else if (tomorrowInput === "n") {
+      const customDate = prompt("Otra fecha yyyy-mm-dd: ");
+      tomorrowDate = customDate;
+      break;
+    }
+  }
+
+  const lastWeek = new Date(tomorrow);
+  lastWeek.setDate(lastWeek.getDate() - 7);
+  let lastWeekDate = lastWeek.toLocaleDateString("en-CA");
+  const lastWeekInput = prompt(`Semana pasada: ${lastWeekDate} ([y]/n) `);
+  while (true) {
+    if (lastWeekInput === "y" || lastWeekInput === "") {
+      break;
+    } else if (lastWeekInput === "n") {
+      const customDate = prompt("Otra fecha yyyy-mm-dd: ");
+      lastWeekDate = customDate;
+      break;
+    }
+  }
+
+  let ignoreNames = [];
+  const ignoreInput = prompt("Ignorar? (y/[n]) ");
+  while (true) {
+    if (ignoreInput === "n" || ignoreInput === "") {
+      break;
+    } else if (ignoreInput === "y") {
+      const namesInput = prompt("Nombres: ");
+      ignoreNames = namesInput
+        .split(",")
+        .map((name) => name.trim().toLowerCase());
+      break;
+    }
+  }
+
+  return {
+    tomorrowDate,
+    lastWeekDate,
+    ignoreNames,
+  };
+}
+
 (async () => {
+  const { tomorrowDate, lastWeekDate, ignoreNames } = configValues();
+
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext({ acceptDownloads: true });
   const page = await context.newPage();
 
   await login(page);
 
-  const codes = await getDocumentsCodes(page);
+  const codes = await getDocumentsCodes(page, lastWeekDate, ignoreNames);
+
+  const input = prompt(
+    `Se procesarán ${codes.length} documentos. Continuar? ([y]/n) `
+  );
+  if (input !== "y" && input !== "") {
+    console.log("Proceso cancelado");
+    await browser.close();
+    return;
+  }
+
   console.log("Procesando documentos...");
   const progressBar = new cliProgress.SingleBar(
     {
@@ -121,9 +181,9 @@ async function downloadDocument(page, context, documentCode) {
   progressBar.start(codes.length, 0);
 
   for (const code of codes) {
-    await copyDocument(page, code);
-    await signDocument(page);
-    await downloadDocument(page, context, code);
+    await copyDocument(page, code, tomorrowDate);
+    // await signDocument(page);
+    // await downloadDocument(page, context, code);
     progressBar.increment();
   }
   progressBar.stop();
