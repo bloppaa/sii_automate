@@ -182,8 +182,8 @@ function configValues() {
 
   for (const code of codes) {
     await copyDocument(page, code, tomorrowDate);
-    // await signDocument(page);
-    // await downloadDocument(page, context, code);
+    await signDocument(page);
+    await downloadDocument(page, context, code);
     progressBar.increment();
   }
   progressBar.stop();
@@ -206,4 +206,6 @@ function configValues() {
       fs.unlinkSync(filePath);
     }
   }
+
+  console.log(colors.green("Proceso completado"));
 })();
