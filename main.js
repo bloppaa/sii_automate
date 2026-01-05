@@ -59,7 +59,9 @@ async function getDocumentsCodes(page, copyDate, ignoreNames) {
   return urls.map((url) => DOCUMENT_CODE_REGEX.exec(url)[1]);
 }
 
-async function copyDocument(page, documentCode, targetDate) {
+async function copyDocument(page, documentCode, targetDate, changeNames) {
+  const names = changeNames.map((item) => item.name);
+
   await page.goto(DOCUMENT_URL + documentCode);
   await page.bringToFront();
   await page
@@ -72,6 +74,17 @@ async function copyDocument(page, documentCode, targetDate) {
     .locator('select[name="cbo_anio_boleta"]')
     .selectOption(targetDate.split("-")[0]);
   await page.locator('input[name="EFXP_CIUDAD_RECEP"]').fill("OVALLE");
+
+  const inputName = await page
+    .locator('input[name="EFXP_RZN_SOC_RECEP"]')
+    .inputValue();
+  const name = inputName.split(" ")[0].toLowerCase();
+
+  if (names.includes(name)) {
+    await page
+      .locator('input[name="EFXP_QTY_01"]')
+      .fill(changeNames.find((item) => item.name === name).kilos);
+  }
 }
 
 async function signDocument(page) {
@@ -138,15 +151,34 @@ function configValues() {
     }
   }
 
+  let changeNames = [];
+  const changeInput = prompt("Cambiar? (y/[n]) ");
+  while (true) {
+    if (changeInput === "n" || changeInput === "") {
+      break;
+    } else if (changeInput === "y") {
+      const namesInput = prompt("Nombres y kilos (nombre:kilos): ");
+      changeNames = namesInput.split(",").map((pair) => {
+        const [name, kilos] = pair
+          .split(":")
+          .map((str) => str.trim().toLowerCase());
+        return { name, kilos };
+      });
+      break;
+    }
+  }
+
   return {
     tomorrowDate,
     lastWeekDate,
     ignoreNames,
+    changeNames,
   };
 }
 
 (async () => {
-  const { tomorrowDate, lastWeekDate, ignoreNames } = configValues();
+  const { tomorrowDate, lastWeekDate, ignoreNames, changeNames } =
+    configValues();
 
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext({ acceptDownloads: true });
@@ -181,7 +213,7 @@ function configValues() {
   progressBar.start(codes.length, 0);
 
   for (const code of codes) {
-    await copyDocument(page, code, tomorrowDate);
+    await copyDocument(page, code, tomorrowDate, changeNames);
     await signDocument(page);
     await downloadDocument(page, context, code);
     progressBar.increment();
