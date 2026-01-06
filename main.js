@@ -14,7 +14,7 @@ const outputFile = path.join(__dirname, "merged.pdf");
 const LOGIN_URL =
   "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?https://www1.sii.cl/cgi-bin/Portal001/mipeSelEmpresa.cgi?DESDE_DONDE_URL=OPCION%3D52%26TIPO%3D4";
 
-const DOCUMENT_LIST_URL = `https://www1.sii.cl/cgi-bin/Portal001/mipeAdminDocsEmi.cgi?ORDEN=&NUM_PAG=1&recaptcha-response=&RUT_RECP=&FOLIO=&RZN_SOC=&TPO_DOC=&ESTADO=`;
+const DOCUMENT_LIST_URL = `https://www1.sii.cl/cgi-bin/Portal001/mipeAdminDocsEmi.cgi?ORDEN=&NUM_PAG=1&recaptcha-response=&RUT_RECP=&FOLIO=&RZN_SOC=&TPO_DOC=52&ESTADO=`;
 const DOCUMENT_CODE_REGEX =
   /\/cgi-bin\/Portal001\/mipeGesDocEmi\.cgi\?ALL_PAGE_ANT=2&CODIGO=(\d+)/;
 const DOCUMENT_URL =
