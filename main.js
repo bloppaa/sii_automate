@@ -34,15 +34,19 @@ async function getDocumentsCodes(page, copyDate, ignoreNames) {
   );
   const rows = await page.locator("#tablaDatos tr:has(td)").all();
 
-  const rowsWithNames = await Promise.all(
-    rows.map(async (row) => {
-      const name = (await row.locator("td").nth(2).textContent())
-        .split(" ")[0]
-        .toLowerCase()
-        .trim();
-      return { row, name };
-    })
-  );
+  const rowsWithNames = [
+    ...new Set(
+      await Promise.all(
+        rows.map(async (row) => {
+          const name = (await row.locator("td").nth(2).textContent())
+            .split(" ")[0]
+            .toLowerCase()
+            .trim();
+          return { row, name };
+        })
+      )
+    ),
+  ];
 
   const filteredRows = rowsWithNames
     .filter((row) => {
@@ -111,28 +115,44 @@ async function downloadDocument(page, context, documentCode) {
 function configValues() {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  let tomorrowDate = tomorrow.toLocaleDateString("en-CA");
+  let tomorrowDate = tomorrow.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  let [dd, mm, yyyy] = tomorrowDate.split("/");
+  tomorrowDate = `${dd}-${mm}-${yyyy}`;
   const tomorrowInput = prompt(`Mañana: ${tomorrowDate} ([y]/n) `);
   while (true) {
     if (tomorrowInput === "y" || tomorrowInput === "") {
+      tomorrowDate = `${yyyy}-${mm}-${dd}`;
       break;
     } else if (tomorrowInput === "n") {
-      const customDate = prompt("Otra fecha yyyy-mm-dd: ");
-      tomorrowDate = customDate;
+      const customDate = prompt("Otra fecha dd-mm-yyyy: ");
+      [dd, mm, yyyy] = customDate.split("-");
+      tomorrowDate = `${yyyy}-${mm}-${dd}`;
       break;
     }
   }
 
   const lastWeek = new Date(tomorrow);
   lastWeek.setDate(lastWeek.getDate() - 7);
-  let lastWeekDate = lastWeek.toLocaleDateString("en-CA");
+  let lastWeekDate = lastWeek.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  [dd, mm, yyyy] = lastWeekDate.split("/");
+  lastWeekDate = `${dd}-${mm}-${yyyy}`;
   const lastWeekInput = prompt(`Semana pasada: ${lastWeekDate} ([y]/n) `);
   while (true) {
     if (lastWeekInput === "y" || lastWeekInput === "") {
+      lastWeekDate = `${yyyy}-${mm}-${dd}`;
       break;
     } else if (lastWeekInput === "n") {
-      const customDate = prompt("Otra fecha yyyy-mm-dd: ");
-      lastWeekDate = customDate;
+      const customDate = prompt("Otra fecha dd-mm-yyyy: ");
+      [dd, mm, yyyy] = customDate.split("-");
+      lastWeekDate = `${yyyy}-${mm}-${dd}`;
       break;
     }
   }
