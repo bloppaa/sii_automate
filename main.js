@@ -64,8 +64,6 @@ async function getDocumentsCodes(page, copyDate, ignoreNames) {
 }
 
 async function copyDocument(page, documentCode, targetDate, changeNames) {
-  const names = changeNames.map((item) => item.name);
-
   await page.goto(DOCUMENT_URL + documentCode);
   await page.bringToFront();
   await page
@@ -82,12 +80,18 @@ async function copyDocument(page, documentCode, targetDate, changeNames) {
   const inputName = await page
     .locator('input[name="EFXP_RZN_SOC_RECEP"]')
     .inputValue();
-  const name = inputName.split(" ")[0].toLowerCase();
+  const normalizedInputName = inputName
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
-  if (names.includes(name)) {
-    await page
-      .locator('input[name="EFXP_QTY_01"]')
-      .fill(changeNames.find((item) => item.name === name).kilos);
+  const match = changeNames.find((item) =>
+    normalizedInputName.startsWith(item.name)
+  );
+
+  if (match) {
+    await page.locator('input[name="EFXP_QTY_01"]').fill(match.kilos);
   }
 }
 
