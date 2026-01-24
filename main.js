@@ -6,7 +6,6 @@ const cliProgress = require("cli-progress");
 const colors = require("colors");
 const prompt = require("prompt-sync")();
 require("dotenv").config({ quiet: true });
-
 const merger = new PDFMerger();
 const documentsDir = path.join(__dirname, "documents");
 const outputFile = path.join(__dirname, "merged.pdf");
@@ -30,7 +29,7 @@ async function login(page) {
 async function getDocumentsCodes(page, copyDate, ignoreNames) {
   await page.waitForLoadState();
   await page.goto(
-    DOCUMENT_LIST_URL + `&FEC_DESDE=${copyDate}&FEC_HASTA=${copyDate}`
+    DOCUMENT_LIST_URL + `&FEC_DESDE=${copyDate}&FEC_HASTA=${copyDate}`,
   );
   const rows = await page.locator("#tablaDatos tr:has(td)").all();
 
@@ -39,25 +38,26 @@ async function getDocumentsCodes(page, copyDate, ignoreNames) {
       await Promise.all(
         rows.map(async (row) => {
           const name = (await row.locator("td").nth(2).textContent())
-            .split(" ")[0]
             .toLowerCase()
-            .trim();
+            .trim()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
           return { row, name };
-        })
-      )
+        }),
+      ),
     ),
   ];
 
   const filteredRows = rowsWithNames
     .filter((row) => {
-      return !ignoreNames.includes(row.name.toLowerCase());
+      return !ignoreNames.some((ignoreName) => row.name.startsWith(ignoreName));
     })
     .map((row) => row.row);
 
   const urls = await Promise.all(
     filteredRows.map((row) =>
-      row.locator("td").first().locator("a").getAttribute("href")
-    )
+      row.locator("td").first().locator("a").getAttribute("href"),
+    ),
   );
 
   return urls.map((url) => DOCUMENT_CODE_REGEX.exec(url)[1]);
@@ -87,7 +87,7 @@ async function copyDocument(page, documentCode, targetDate, changeNames) {
     .replace(/[\u0300-\u036f]/g, "");
 
   const match = changeNames.find((item) =>
-    normalizedInputName.startsWith(item.name)
+    normalizedInputName.startsWith(item.name),
   );
 
   if (match) {
@@ -213,7 +213,7 @@ function configValues() {
   const codes = await getDocumentsCodes(page, lastWeekDate, ignoreNames);
 
   const input = prompt(
-    `Se procesarán ${codes.length} documentos. Continuar? ([y]/n) `
+    `Se procesarán ${codes.length} documentos. Continuar? ([y]/n) `,
   );
   if (input !== "y" && input !== "") {
     console.log("Proceso cancelado");
@@ -232,7 +232,7 @@ function configValues() {
       barIncompleteChar: "\u2591",
       hideCursor: true,
     },
-    cliProgress.Presets.shades_classic
+    cliProgress.Presets.shades_classic,
   );
   progressBar.start(codes.length, 0);
 
