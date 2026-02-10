@@ -1,14 +1,11 @@
 const { chromium } = require("playwright");
-const PDFMerger = require("pdf-merger-js").default;
 const fs = require("fs");
 const path = require("path");
 const cliProgress = require("cli-progress");
 const colors = require("colors");
 const prompt = require("prompt-sync")();
 require("dotenv").config({ quiet: true });
-const merger = new PDFMerger();
 const documentsDir = path.join(__dirname, "documents");
-const outputFile = path.join(__dirname, "merged.pdf");
 
 const LOGIN_URL =
   "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?https://www1.sii.cl/cgi-bin/Portal001/mipeSelEmpresa.cgi?DESDE_DONDE_URL=OPCION%3D52%26TIPO%3D4";
@@ -126,7 +123,7 @@ function configValues() {
   });
   let [dd, mm, yyyy] = tomorrowDate.split("/");
   tomorrowDate = `${dd}-${mm}-${yyyy}`;
-  const tomorrowInput = prompt(`Mañana: ${tomorrowDate} ([y]/n) `);
+  const tomorrowInput = prompt(`Mañana: ${tomorrowDate} (Y/n) `);
   while (true) {
     if (tomorrowInput === "y" || tomorrowInput === "") {
       tomorrowDate = `${yyyy}-${mm}-${dd}`;
@@ -148,7 +145,7 @@ function configValues() {
   });
   [dd, mm, yyyy] = lastWeekDate.split("/");
   lastWeekDate = `${dd}-${mm}-${yyyy}`;
-  const lastWeekInput = prompt(`Semana pasada: ${lastWeekDate} ([y]/n) `);
+  const lastWeekInput = prompt(`Semana pasada: ${lastWeekDate} (Y/n) `);
   while (true) {
     if (lastWeekInput === "y" || lastWeekInput === "") {
       lastWeekDate = `${yyyy}-${mm}-${dd}`;
@@ -162,7 +159,7 @@ function configValues() {
   }
 
   let ignoreNames = [];
-  const ignoreInput = prompt("Ignorar? (y/[n]) ");
+  const ignoreInput = prompt("Ignorar? (y/N) ");
   while (true) {
     if (ignoreInput === "n" || ignoreInput === "") {
       break;
@@ -176,7 +173,7 @@ function configValues() {
   }
 
   let changeNames = [];
-  const changeInput = prompt("Cambiar? (y/[n]) ");
+  const changeInput = prompt("Cambiar? (y/N) ");
   while (true) {
     if (changeInput === "n" || changeInput === "") {
       break;
@@ -201,6 +198,9 @@ function configValues() {
 }
 
 (async () => {
+  const { default: PDFMerger } = await import("pdf-merger-js");
+  const merger = new PDFMerger();
+
   const { tomorrowDate, lastWeekDate, ignoreNames, changeNames } =
     configValues();
 
@@ -213,7 +213,7 @@ function configValues() {
   const codes = await getDocumentsCodes(page, lastWeekDate, ignoreNames);
 
   const input = prompt(
-    `Se procesarán ${codes.length} documentos. Continuar? ([y]/n) `,
+    `Se procesarán ${codes.length} documentos. Continuar? (Y/n) `,
   );
   if (input !== "y" && input !== "") {
     console.log("Proceso cancelado");
@@ -246,21 +246,19 @@ function configValues() {
 
   await browser.close();
 
-  const files = fs.readdirSync(documentsDir);
-  const pdfFiles = files.filter((file) => file.toLowerCase().endsWith(".pdf"));
+  const pdfs = fs
+    .readdirSync(documentsDir)
+    .filter((file) => file.endsWith(".pdf"))
+    .map((file) => path.join(documentsDir, file));
 
-  for (const file of pdfFiles) {
-    const filePath = path.join(documentsDir, file);
-    await merger.add(filePath, 1);
+  for (const pdf of pdfs) {
+    await merger.add(pdf, 1);
   }
 
-  await merger.save(outputFile);
+  await merger.save("merged.pdf");
 
-  for (const file of files) {
-    const filePath = path.join(documentsDir, file);
-    if (fs.lstatSync(filePath).isFile()) {
-      fs.unlinkSync(filePath);
-    }
+  for (const file of fs.readdirSync(documentsDir)) {
+    fs.unlinkSync(path.join(documentsDir, file));
   }
 
   console.log(colors.green("Proceso completado"));
