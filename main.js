@@ -255,7 +255,7 @@ function configValues() {
     await merger.add(pdf, 1);
   }
 
-  await merger.save("merged.pdf");
+  await merger.save(path.join(__dirname, "merged.pdf"));
 
   for (const file of fs.readdirSync(documentsDir)) {
     fs.unlinkSync(path.join(documentsDir, file));
