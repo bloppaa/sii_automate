@@ -123,13 +123,13 @@ function configValues() {
   });
   let [dd, mm, yyyy] = tomorrowDate.split("/");
   tomorrowDate = `${dd}-${mm}-${yyyy}`;
-  const tomorrowInput = prompt(`Mañana: ${tomorrowDate} (Y/n) `);
+  const tomorrowInput = prompt(`🔮 Mañana: ${tomorrowDate} (Y/n) `);
   while (true) {
     if (tomorrowInput === "y" || tomorrowInput === "") {
       tomorrowDate = `${yyyy}-${mm}-${dd}`;
       break;
     } else if (tomorrowInput === "n") {
-      const customDate = prompt("Otra fecha dd-mm-yyyy: ");
+      const customDate = prompt("   Otra fecha (dd-mm-yyyy) ");
       [dd, mm, yyyy] = customDate.split("-");
       tomorrowDate = `${yyyy}-${mm}-${dd}`;
       break;
@@ -145,13 +145,13 @@ function configValues() {
   });
   [dd, mm, yyyy] = lastWeekDate.split("/");
   lastWeekDate = `${dd}-${mm}-${yyyy}`;
-  const lastWeekInput = prompt(`Semana pasada: ${lastWeekDate} (Y/n) `);
+  const lastWeekInput = prompt(`📅 Semana pasada: ${lastWeekDate} (Y/n) `);
   while (true) {
     if (lastWeekInput === "y" || lastWeekInput === "") {
       lastWeekDate = `${yyyy}-${mm}-${dd}`;
       break;
     } else if (lastWeekInput === "n") {
-      const customDate = prompt("Otra fecha dd-mm-yyyy: ");
+      const customDate = prompt("   Otra fecha (dd-mm-yyyy) ");
       [dd, mm, yyyy] = customDate.split("-");
       lastWeekDate = `${yyyy}-${mm}-${dd}`;
       break;
@@ -159,12 +159,12 @@ function configValues() {
   }
 
   let ignoreNames = [];
-  const ignoreInput = prompt("Ignorar? (y/N) ");
+  const ignoreInput = prompt("👻 Ignorar? (y/N) ");
   while (true) {
     if (ignoreInput === "n" || ignoreInput === "") {
       break;
     } else if (ignoreInput === "y") {
-      const namesInput = prompt("Nombres: ");
+      const namesInput = prompt("   Nombres ");
       ignoreNames = namesInput
         .split(",")
         .map((name) => name.trim().toLowerCase());
@@ -173,12 +173,12 @@ function configValues() {
   }
 
   let changeNames = [];
-  const changeInput = prompt("Cambiar? (y/N) ");
+  const changeInput = prompt("♻️ Cambiar? (y/N) ");
   while (true) {
     if (changeInput === "n" || changeInput === "") {
       break;
     } else if (changeInput === "y") {
-      const namesInput = prompt("Nombres y kilos (nombre:kilos): ");
+      const namesInput = prompt("   Nombres y kilos (nombre:kilos) ");
       changeNames = namesInput.split(",").map((pair) => {
         const [name, kilos] = pair
           .split(":")
@@ -213,7 +213,7 @@ function configValues() {
   const codes = await getDocumentsCodes(page, lastWeekDate, ignoreNames);
 
   const input = prompt(
-    `Se procesarán ${codes.length} documentos. Continuar? (Y/n) `,
+    `✅ Se procesarán ${codes.length} documentos. Continuar? (Y/n) `,
   );
   if (input !== "y" && input !== "") {
     console.log("Proceso cancelado");
