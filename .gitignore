@@ -11,3 +11,4 @@ node_modules/
 *.pdf
 debug.js
 *.sh
+*.csv
