@@ -33,7 +33,7 @@ function generate(month, year, inputPath, outputPath) {
   const clients = parseCSV(raw);
   const daysInMonth = getDaysInMonth(month, year);
 
-  let output = "alias,rut,precio,cantidad,dia,mes,anio\n";
+  let output = "alias,rut,precio,cantidad,fecha\n";
 
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month - 1, d);
@@ -44,7 +44,9 @@ function generate(month, year, inputPath, outputPath) {
     clients.forEach((client) => {
       const qty = Number(client[dayName] || 0);
       if (qty <= 0) return;
-      output += `${client.alias},${client.rut},${client.precio},${qty},${d},${month},${year}\n`;
+
+      const dateStr = new Date(year, month - 1, d).toISOString().slice(0, 10);
+      output += `${client.alias},${client.rut},${client.precio},${qty},${dateStr}\n`;
     });
   }
 
