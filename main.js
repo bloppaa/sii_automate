@@ -30,8 +30,8 @@ async function login(page) {
  */
 async function processDocument(page, context, client) {
   await fillDocument(page, client);
-  // await signDocument(page);
-  // await downloadDocument(page, context, client);
+  await signDocument(page);
+  await downloadDocument(page, context, client);
 }
 
 /**
