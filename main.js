@@ -3,19 +3,18 @@ const fs = require("fs");
 const path = require("path");
 const cliProgress = require("cli-progress");
 const colors = require("colors");
-const prompt = require("prompt-sync")();
 require("dotenv").config({ quiet: true });
 const documentsDir = path.join(__dirname, "documents");
 
 const LOGIN_URL =
   "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?https://www1.sii.cl/cgi-bin/Portal001/mipeSelEmpresa.cgi?DESDE_DONDE_URL=OPCION%3D52%26TIPO%3D4";
+const DOCUMENT_EDIT_URL =
+  "https://www1.sii.cl/cgi-bin/Portal001/mipeGenFacEx.cgi?PTDC_CODIGO=52";
 
-const DOCUMENT_LIST_URL = `https://www1.sii.cl/cgi-bin/Portal001/mipeAdminDocsEmi.cgi?ORDEN=&NUM_PAG=1&recaptcha-response=&RUT_RECP=&FOLIO=&RZN_SOC=&TPO_DOC=52&ESTADO=`;
-const DOCUMENT_CODE_REGEX =
-  /\/cgi-bin\/Portal001\/mipeGesDocEmi\.cgi\?ALL_PAGE_ANT=2&CODIGO=(\d+)/;
-const DOCUMENT_URL =
-  "https://www1.sii.cl/cgi-bin/Portal001/mipeGenFacEx.cgi?IGUAL=CODIGO&PTDC_CODIGO=52&VALOR=";
-
+/**
+ * Login al sitio del SII usando las credenciales almacenadas en las variables de entorno.
+ * @param {*} page
+ */
 async function login(page) {
   await page.goto(LOGIN_URL);
   await page.getByRole("textbox", { name: "Ej:" }).fill(process.env.RUT);
@@ -23,75 +22,62 @@ async function login(page) {
   await page.getByRole("button", { name: "Ingresar", exact: true }).click();
 }
 
-async function getDocumentsCodes(page, copyDate, ignoreNames) {
-  await page.waitForLoadState();
-  await page.goto(
-    DOCUMENT_LIST_URL + `&FEC_DESDE=${copyDate}&FEC_HASTA=${copyDate}`,
-  );
-  const rows = await page.locator("#tablaDatos tr:has(td)").all();
-
-  const rowsWithNames = [
-    ...new Set(
-      await Promise.all(
-        rows.map(async (row) => {
-          const name = (await row.locator("td").nth(2).textContent())
-            .toLowerCase()
-            .trim()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "");
-          return { row, name };
-        }),
-      ),
-    ),
-  ];
-
-  const filteredRows = rowsWithNames
-    .filter((row) => {
-      return !ignoreNames.some((ignoreName) => row.name.startsWith(ignoreName));
-    })
-    .map((row) => row.row);
-
-  const urls = await Promise.all(
-    filteredRows.map((row) =>
-      row.locator("td").first().locator("a").getAttribute("href"),
-    ),
-  );
-
-  return urls.map((url) => DOCUMENT_CODE_REGEX.exec(url)[1]);
+/**
+ * Función principal que procesa cada documento: llena los datos, firma y descarga el PDF.
+ * @param {*} page
+ * @param {*} context
+ * @param {*} client Cliente con los datos necesarios para llenar el documento.
+ */
+async function processDocument(page, context, client) {
+  await fillDocument(page, client);
+  await signDocument(page);
+  await downloadDocument(page, context, client);
 }
 
-async function copyDocument(page, documentCode, targetDate, changeNames) {
-  await page.goto(DOCUMENT_URL + documentCode);
+/**
+ * Rellena el formulario del documento con los datos del cliente.
+ * @param {*} page
+ * @param {*} client
+ */
+async function fillDocument(page, client) {
+  await page.waitForLoadState();
+  await page.goto(DOCUMENT_EDIT_URL);
   await page.bringToFront();
-  await page
-    .locator('select[name="cbo_dia_boleta"]')
-    .selectOption(targetDate.split("-")[2]);
-  await page
-    .locator('select[name="cbo_mes_boleta"]')
-    .selectOption(targetDate.split("-")[1]);
+  await page.locator('select[name="cbo_dia_boleta"]').selectOption(client.dia);
+  await page.locator('select[name="cbo_mes_boleta"]').selectOption(client.mes);
   await page
     .locator('select[name="cbo_anio_boleta"]')
-    .selectOption(targetDate.split("-")[0]);
-  await page.locator('input[name="EFXP_CIUDAD_RECEP"]').fill("OVALLE");
+    .selectOption(client.anio);
+  await page.locator('input[name="EFXP_RUT_RECEP"]').fill(client.rut);
+  await page.locator('input[name="EFXP_DV_RECEP"]').fill(client.dv);
 
-  const inputName = await page
-    .locator('input[name="EFXP_RZN_SOC_RECEP"]')
-    .inputValue();
-  const normalizedInputName = inputName
-    .toLowerCase()
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(500);
 
-  const match = changeNames.find((item) =>
-    normalizedInputName.startsWith(item.name),
-  );
-
-  if (match) {
-    await page.locator('input[name="EFXP_QTY_01"]').fill(match.kilos);
+  // A veces la ciudad no se llena correctamente, así que es necesario intentar
+  // varias veces con un pequeño delay entre intentos
+  const cityInput = page.locator('input[name="EFXP_CIUDAD_RECEP"]');
+  let retries = 3;
+  while (retries > 0) {
+    await cityInput.fill("OVALLE");
+    await page.waitForTimeout(200);
+    const value = await cityInput.inputValue();
+    if (value === "OVALLE") {
+      break;
+    }
+    retries--;
   }
+
+  await page.locator('input[name="EFXP_NMB_01"]').fill("PAN");
+  await page.locator('input[name="EFXP_QTY_01"]').fill(client.cantidad);
+  await page.locator('input[name="EFXP_UNMD_01"]').fill("KG");
+  await page.locator('input[name="EFXP_PRC_01"]').fill(client.precio);
 }
 
+/**
+ * Firma el documento usando la clave almacenada en las variables de entorno.
+ * @param {*} page
+ */
 async function signDocument(page) {
   await page.getByRole("button", { name: "Validar y visualizar" }).click();
   await page.getByRole("button", { name: "Firmar" }).click();
@@ -101,7 +87,13 @@ async function signDocument(page) {
   await page.getByRole("button", { name: "Firmar" }).click();
 }
 
-async function downloadDocument(page, context, documentCode) {
+/**
+ * Descarga el documento firmado como archivo PDF.
+ * @param {*} page
+ * @param {*} context
+ * @param {*} client
+ */
+async function downloadDocument(page, context, client) {
   const [newPage] = await Promise.all([
     context.waitForEvent("page"),
     page.getByRole("link", { name: "Ver Documento" }).click(),
@@ -110,99 +102,66 @@ async function downloadDocument(page, context, documentCode) {
   const pdfUrl = newPage.url();
   const response = await newPage.request.get(pdfUrl);
   const buffer = await response.body();
-  fs.writeFileSync(`${documentsDir}/${documentCode}.pdf`, buffer);
+  fs.writeFileSync(`${documentsDir}/${client.rut}.pdf`, buffer);
 }
 
-function configValues() {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  let tomorrowDate = tomorrow.toLocaleDateString("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  let [dd, mm, yyyy] = tomorrowDate.split("/");
-  tomorrowDate = `${dd}-${mm}-${yyyy}`;
-  const tomorrowInput = prompt(`🔮 Mañana: ${tomorrowDate} (Y/n) `);
-  while (true) {
-    if (tomorrowInput === "y" || tomorrowInput === "") {
-      tomorrowDate = `${yyyy}-${mm}-${dd}`;
-      break;
-    } else if (tomorrowInput === "n") {
-      const customDate = prompt("   Otra fecha (dd-mm-yyyy) ");
-      [dd, mm, yyyy] = customDate.split("-");
-      tomorrowDate = `${yyyy}-${mm}-${dd}`;
-      break;
-    }
+/**
+ * Obtiene la fecha de mañana en formato ISO respecto a la zona horaria local.
+ * @returns Fecha de mañana en formato "YYYY-MM-DD".
+ */
+function getTomorrowLocalISO() {
+  const today = new Date();
+  const tomorrow = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + 1,
+  );
+
+  const year = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
+  const day = String(tomorrow.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Lee el archivo CSV con los datos de los clientes y filtra solo aquellos que tienen fecha de mañana.
+ * @param {*} csvPath
+ * @returns Lista de clientes con fecha de mañana y sus datos necesarios para procesar el documento.
+ */
+function readTomorrow(csvPath) {
+  const raw = fs.readFileSync(csvPath, "utf8");
+  const lines = raw.trim().split("\n");
+  const tomorrow = getTomorrowLocalISO();
+
+  const results = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const [alias, fullRut, precio, cantidad, fecha] = lines[i].split(",");
+    const [rut, dv] = fullRut.replace(/\./g, "").split("-");
+
+    if (fecha !== tomorrow) continue;
+
+    const [anio, mes, dia] = fecha.split("-");
+
+    results.push({
+      alias: alias.trim(),
+      rut: rut.trim(),
+      dv: dv.trim(),
+      precio: precio.trim(),
+      cantidad: cantidad.trim(),
+      dia: dia.trim(),
+      mes: mes.trim(),
+      anio: anio.trim(),
+    });
   }
 
-  const lastWeek = new Date(tomorrow);
-  lastWeek.setDate(lastWeek.getDate() - 7);
-  let lastWeekDate = lastWeek.toLocaleDateString("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  [dd, mm, yyyy] = lastWeekDate.split("/");
-  lastWeekDate = `${dd}-${mm}-${yyyy}`;
-  const lastWeekInput = prompt(`📅 Semana pasada: ${lastWeekDate} (Y/n) `);
-  while (true) {
-    if (lastWeekInput === "y" || lastWeekInput === "") {
-      lastWeekDate = `${yyyy}-${mm}-${dd}`;
-      break;
-    } else if (lastWeekInput === "n") {
-      const customDate = prompt("   Otra fecha (dd-mm-yyyy) ");
-      [dd, mm, yyyy] = customDate.split("-");
-      lastWeekDate = `${yyyy}-${mm}-${dd}`;
-      break;
-    }
-  }
-
-  let ignoreNames = [];
-  const ignoreInput = prompt("👻 Ignorar? (y/N) ");
-  while (true) {
-    if (ignoreInput === "n" || ignoreInput === "") {
-      break;
-    } else if (ignoreInput === "y") {
-      const namesInput = prompt("   Nombres ");
-      ignoreNames = namesInput
-        .split(",")
-        .map((name) => name.trim().toLowerCase());
-      break;
-    }
-  }
-
-  let changeNames = [];
-  const changeInput = prompt("♻️ Cambiar? (y/N) ");
-  while (true) {
-    if (changeInput === "n" || changeInput === "") {
-      break;
-    } else if (changeInput === "y") {
-      const namesInput = prompt("   Nombres y kilos (nombre:kilos) ");
-      changeNames = namesInput.split(",").map((pair) => {
-        const [name, kilos] = pair
-          .split(":")
-          .map((str) => str.trim().toLowerCase());
-        return { name, kilos };
-      });
-      break;
-    }
-  }
-
-  return {
-    tomorrowDate,
-    lastWeekDate,
-    ignoreNames,
-    changeNames,
-  };
+  return results;
 }
 
 (async () => {
   const { default: PDFMerger } = await import("pdf-merger-js");
   const merger = new PDFMerger();
-
-  const { tomorrowDate, lastWeekDate, ignoreNames, changeNames } =
-    configValues();
 
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext({ acceptDownloads: true });
@@ -210,18 +169,9 @@ function configValues() {
 
   await login(page);
 
-  const codes = await getDocumentsCodes(page, lastWeekDate, ignoreNames);
+  // TODO: Implementar fecha personalizada pasada como argumento por consola
+  const tomorrowClients = readTomorrow("output.csv");
 
-  const input = prompt(
-    `✅ Se procesarán ${codes.length} documentos. Continuar? (Y/n) `,
-  );
-  if (input !== "y" && input !== "") {
-    console.log("Proceso cancelado");
-    await browser.close();
-    return;
-  }
-
-  console.log("Procesando documentos...");
   const progressBar = new cliProgress.SingleBar(
     {
       format:
@@ -234,18 +184,18 @@ function configValues() {
     },
     cliProgress.Presets.shades_classic,
   );
-  progressBar.start(codes.length, 0);
+  progressBar.start(tomorrowClients.length, 0);
 
-  for (const code of codes) {
-    await copyDocument(page, code, tomorrowDate, changeNames);
-    await signDocument(page);
-    await downloadDocument(page, context, code);
+  for (const client of tomorrowClients) {
+    await processDocument(page, context, client);
     progressBar.increment();
   }
   progressBar.stop();
 
   await browser.close();
 
+  // Combina todos los PDFs descargados en un solo archivo "merged.pdf"
+  // Solo se combina la primera página de cada PDF
   const pdfs = fs
     .readdirSync(documentsDir)
     .filter((file) => file.endsWith(".pdf"))
@@ -257,6 +207,7 @@ function configValues() {
 
   await merger.save(path.join(__dirname, "merged.pdf"));
 
+  // Elimina los PDFs individuales después de combinarlos
   for (const file of fs.readdirSync(documentsDir)) {
     fs.unlinkSync(path.join(documentsDir, file));
   }
