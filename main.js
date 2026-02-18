@@ -30,8 +30,8 @@ async function login(page) {
  */
 async function processDocument(page, context, client) {
   await fillDocument(page, client);
-  await signDocument(page);
-  await downloadDocument(page, context, client);
+  // await signDocument(page);
+  // await downloadDocument(page, context, client);
 }
 
 /**
@@ -48,25 +48,31 @@ async function fillDocument(page, client) {
   await page
     .locator('select[name="cbo_anio_boleta"]')
     .selectOption(client.anio);
+
+  // Al ingresar el RUT, el sistema hace una consulta para validar el RUT y obtener la ciudad asociada.
+  // Esto causa que el campo de ciudad se resetee después de ingresar el RUT.
+  // Para evitar esto, se ingresa un placeholder temporal en el campo de ciudad antes de ingresar el RUT,
+  // y luego se espera a que el campo se resetee antes de ingresar la ciudad correcta.
+
+  const cityInput = page.locator('input[name="EFXP_CIUDAD_RECEP"]');
+  await cityInput.fill("TEMP");
+
   await page.locator('input[name="EFXP_RUT_RECEP"]').fill(client.rut);
-  await page.locator('input[name="EFXP_DV_RECEP"]').fill(client.dv);
+  const dvInput = page.locator('input[name="EFXP_DV_RECEP"]');
+  await dvInput.fill(client.dv);
+  await dvInput.press("Enter");
 
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(500);
 
-  // A veces la ciudad no se llena correctamente, así que es necesario intentar
-  // varias veces con un pequeño delay entre intentos
-  const cityInput = page.locator('input[name="EFXP_CIUDAD_RECEP"]');
-  let retries = 3;
-  while (retries > 0) {
-    await cityInput.fill("OVALLE");
-    await page.waitForTimeout(200);
-    const value = await cityInput.inputValue();
-    if (value === "OVALLE") {
-      break;
-    }
-    retries--;
-  }
+  await page.waitForFunction(
+    () => {
+      const input = document.querySelector('input[name="EFXP_CIUDAD_RECEP"]');
+      return input && input.value !== "TEMP";
+    },
+    { timeout: 5000 },
+  );
+
+  await cityInput.fill("OVALLE");
 
   await page.locator('input[name="EFXP_NMB_01"]').fill("PAN");
   await page.locator('input[name="EFXP_QTY_01"]').fill(client.cantidad);
