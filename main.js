@@ -43,36 +43,31 @@ async function fillDocument(page, client) {
   await page.waitForLoadState();
   await page.goto(DOCUMENT_EDIT_URL);
   await page.bringToFront();
+
+  await page.locator('input[name="EFXP_RUT_RECEP"]').fill(client.rut);
+  const dvInput = page.locator('input[name="EFXP_DV_RECEP"]');
+  await dvInput.fill(client.dv);
+
+  // Escuchar la respuesta a la solicitud que se hace al ingresar el RUT del cliente.
+  // Una vez que llega la respuesta se reemplazan ciertos datos, por lo que hay que esperar
+  // a que llegue antes de continuar con el llenado del formulario.
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes("mipeGenFacEx.cgi") && response.status() === 200,
+    { timeout: 10000 },
+  );
+
+  await dvInput.press("Enter");
+  await responsePromise;
+
+  // Una vez que llega la respuesta se reemplazan los datos del cliente
   await page.locator('select[name="cbo_dia_boleta"]').selectOption(client.dia);
   await page.locator('select[name="cbo_mes_boleta"]').selectOption(client.mes);
   await page
     .locator('select[name="cbo_anio_boleta"]')
     .selectOption(client.anio);
 
-  // Al ingresar el RUT, el sistema hace una consulta para validar el RUT y obtener la ciudad asociada.
-  // Esto causa que el campo de ciudad se resetee después de ingresar el RUT.
-  // Para evitar esto, se ingresa un placeholder temporal en el campo de ciudad antes de ingresar el RUT,
-  // y luego se espera a que el campo se resetee antes de ingresar la ciudad correcta.
-
-  const cityInput = page.locator('input[name="EFXP_CIUDAD_RECEP"]');
-  await cityInput.fill("TEMP");
-
-  await page.locator('input[name="EFXP_RUT_RECEP"]').fill(client.rut);
-  const dvInput = page.locator('input[name="EFXP_DV_RECEP"]');
-  await dvInput.fill(client.dv);
-  await dvInput.press("Enter");
-
-  await page.waitForLoadState("networkidle");
-
-  await page.waitForFunction(
-    () => {
-      const input = document.querySelector('input[name="EFXP_CIUDAD_RECEP"]');
-      return input && input.value !== "TEMP";
-    },
-    { timeout: 5000 },
-  );
-
-  await cityInput.fill("OVALLE");
+  await page.locator('input[name="EFXP_CIUDAD_RECEP"]').fill("OVALLE");
 
   await page.locator('input[name="EFXP_NMB_01"]').fill("PAN");
   await page.locator('input[name="EFXP_QTY_01"]').fill(client.cantidad);
@@ -109,6 +104,7 @@ async function downloadDocument(page, context, client) {
   const response = await newPage.request.get(pdfUrl);
   const buffer = await response.body();
   fs.writeFileSync(`${documentsDir}/${client.rut}.pdf`, buffer);
+  await newPage.close();
 }
 
 /**
@@ -136,7 +132,7 @@ function getTomorrowLocalISO() {
  * @returns Lista de clientes con fecha de mañana y sus datos necesarios para procesar el documento.
  */
 function readTomorrow(csvPath) {
-  const raw = fs.readFileSync(csvPath, "utf8");
+  const raw = fs.readFileSync(path.join(__dirname, csvPath), "utf8");
   const lines = raw.trim().split("\n");
   const tomorrow = getTomorrowLocalISO();
 
