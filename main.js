@@ -142,7 +142,7 @@ function readTomorrow(csvPath) {
     const [alias, fullRut, precio, cantidad, fecha] = lines[i].split(",");
     const [rut, dv] = fullRut.replace(/\./g, "").split("-");
 
-    if (fecha !== tomorrow) continue;
+    if (fecha !== tomorrow || cantidad === "0") continue;
 
     const [anio, mes, dia] = fecha.split("-");
 
