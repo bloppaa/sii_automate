@@ -7,7 +7,8 @@ require("dotenv").config({ quiet: true });
 const documentsDir = path.join(__dirname, "documents");
 
 const LOGIN_URL =
-  "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?https://www1.sii.cl/cgi-bin/Portal001/mipeSelEmpresa.cgi?DESDE_DONDE_URL=OPCION%3D52%26TIPO%3D4";
+  "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?" +
+  "https://www1.sii.cl/cgi-bin/Portal001/mipeSelEmpresa.cgi?DESDE_DONDE_URL=OPCION%3D52%26TIPO%3D4";
 const DOCUMENT_EDIT_URL =
   "https://www1.sii.cl/cgi-bin/Portal001/mipeGenFacEx.cgi?PTDC_CODIGO=52";
 
@@ -23,13 +24,42 @@ async function login(page) {
 }
 
 /**
+ * Función helper para ejecutar una función con reintentos en caso de error, con un delay entre
+ * cada intento.
+ * @param {*} fn
+ * @param {*} retries
+ * @param {*} delay
+ */
+async function executeWithRetry(fn, retries = 3, delay = 1000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      console.error(
+        colors.red(`Error en intento ${i + 1}/${retries}: ${error.message}`),
+      );
+      if (i < retries - 1) {
+        console.log(colors.yellow(`Reintentando en ${delay}ms...`));
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else {
+        throw new Error(
+          `Función falló después de ${retries} intentos: ${error.message}`,
+        );
+      }
+    }
+  }
+}
+
+/**
  * Función principal que procesa cada documento: llena los datos, firma y descarga el PDF.
  * @param {*} page
  * @param {*} context
  * @param {*} client Cliente con los datos necesarios para llenar el documento.
  */
 async function processDocument(page, context, client) {
-  await fillDocument(page, client);
+  // A veces el sitio del SII puede ser inestable, por lo que se implementa un mecanismo de
+  // reintentos para el llenado del formulario
+  await executeWithRetry(() => fillDocument(page, client));
   await signDocument(page);
   await downloadDocument(page, context, client);
 }
@@ -127,7 +157,8 @@ function getTomorrowLocalISO() {
 }
 
 /**
- * Lee el archivo CSV con los datos de los clientes y filtra solo aquellos que tienen fecha de mañana.
+ * Lee el archivo CSV con los datos de los clientes y filtra solo aquellos que tienen fecha de
+ * mañana.
  * @param {*} csvPath
  * @returns Lista de clientes con fecha de mañana y sus datos necesarios para procesar el documento.
  */
