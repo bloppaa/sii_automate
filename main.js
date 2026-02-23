@@ -103,6 +103,9 @@ async function fillDocument(page, client) {
   await page.locator('input[name="EFXP_QTY_01"]').fill(client.cantidad);
   await page.locator('input[name="EFXP_UNMD_01"]').fill("KG");
   await page.locator('input[name="EFXP_PRC_01"]').fill(client.precio);
+
+  await page.getByRole("button", { name: "Validar y visualizar" }).click();
+  await page.getByRole("button", { name: "Firmar" }).click();
 }
 
 /**
@@ -110,8 +113,6 @@ async function fillDocument(page, client) {
  * @param {*} page
  */
 async function signDocument(page) {
-  await page.getByRole("button", { name: "Validar y visualizar" }).click();
-  await page.getByRole("button", { name: "Firmar" }).click();
   await page
     .getByRole("textbox", { name: "Ingrese la clave de su" })
     .fill(process.env.FIRMA);
