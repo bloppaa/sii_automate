@@ -9,8 +9,7 @@ const documentsDir = path.join(__dirname, "documents");
 const LOGIN_URL =
   "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?" +
   "https://www1.sii.cl/cgi-bin/Portal001/mipeSelEmpresa.cgi?DESDE_DONDE_URL=OPCION%3D52%26TIPO%3D4";
-const DOCUMENT_EDIT_URL =
-  "https://www1.sii.cl/cgi-bin/Portal001/mipeGenFacEx.cgi?PTDC_CODIGO=52";
+const DOCUMENT_EDIT_URL = "https://www1.sii.cl/cgi-bin/Portal001/mipeGenFacEx.cgi?PTDC_CODIGO=52";
 
 /**
  * Login al sitio del SII usando las credenciales almacenadas en las variables de entorno.
@@ -24,8 +23,7 @@ async function login(page) {
 }
 
 /**
- * Función helper para ejecutar una función con reintentos en caso de error, con un delay entre
- * cada intento.
+ * Función helper para ejecutar una función con reintentos en caso de error, con un delay entre cada intento.
  * @param {*} fn
  * @param {*} retries
  * @param {*} delay
@@ -35,16 +33,12 @@ async function executeWithRetry(fn, retries = 3, delay = 1000) {
     try {
       return await fn();
     } catch (error) {
-      console.error(
-        colors.red(`Error en intento ${i + 1}/${retries}: ${error.message}`),
-      );
+      console.error(colors.red(`Error en intento ${i + 1}/${retries}: ${error.message}`));
       if (i < retries - 1) {
         console.log(colors.yellow(`Reintentando en ${delay}ms...`));
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await new Promise(resolve => setTimeout(resolve, delay));
       } else {
-        throw new Error(
-          `Función falló después de ${retries} intentos: ${error.message}`,
-        );
+        throw new Error(`Función falló después de ${retries} intentos: ${error.message}`);
       }
     }
   }
@@ -57,8 +51,8 @@ async function executeWithRetry(fn, retries = 3, delay = 1000) {
  * @param {*} client Cliente con los datos necesarios para llenar el documento.
  */
 async function processDocument(page, context, client) {
-  // A veces el sitio del SII puede ser inestable, por lo que se implementa un mecanismo de
-  // reintentos para el llenado del formulario
+  // A veces el sitio del SII puede ser inestable, por lo que se implementa un mecanismo de reintentos para el llenado
+  // del formulario
   await executeWithRetry(() => fillDocument(page, client));
   await signDocument(page);
   await downloadDocument(page, context, client);
@@ -78,12 +72,10 @@ async function fillDocument(page, client) {
   const dvInput = page.locator('input[name="EFXP_DV_RECEP"]');
   await dvInput.fill(client.dv);
 
-  // Escuchar la respuesta a la solicitud que se hace al ingresar el RUT del cliente.
-  // Una vez que llega la respuesta se reemplazan ciertos datos, por lo que hay que esperar
-  // a que llegue antes de continuar con el llenado del formulario.
+  // Escuchar la respuesta a la solicitud que se hace al ingresar el RUT del cliente. Una vez que llega la respuesta se
+  // reemplazan ciertos datos, por lo que hay que esperar a que llegue antes de continuar con el llenado del formulario.
   const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes("mipeGenFacEx.cgi") && response.status() === 200,
+    response => response.url().includes("mipeGenFacEx.cgi") && response.status() === 200,
     { timeout: 10000 },
   );
 
@@ -93,9 +85,7 @@ async function fillDocument(page, client) {
   // Una vez que llega la respuesta se reemplazan los datos del cliente
   await page.locator('select[name="cbo_dia_boleta"]').selectOption(client.dia);
   await page.locator('select[name="cbo_mes_boleta"]').selectOption(client.mes);
-  await page
-    .locator('select[name="cbo_anio_boleta"]')
-    .selectOption(client.anio);
+  await page.locator('select[name="cbo_anio_boleta"]').selectOption(client.anio);
 
   await page.locator('input[name="EFXP_CIUDAD_RECEP"]').fill("OVALLE");
 
@@ -113,9 +103,7 @@ async function fillDocument(page, client) {
  * @param {*} page
  */
 async function signDocument(page) {
-  await page
-    .getByRole("textbox", { name: "Ingrese la clave de su" })
-    .fill(process.env.FIRMA);
+  await page.getByRole("textbox", { name: "Ingrese la clave de su" }).fill(process.env.FIRMA);
   await page.getByRole("button", { name: "Firmar" }).click();
 }
 
@@ -144,11 +132,7 @@ async function downloadDocument(page, context, client) {
  */
 function getTomorrowLocalISO() {
   const today = new Date();
-  const tomorrow = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate() + 1,
-  );
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
 
   const year = tomorrow.getFullYear();
   const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
@@ -158,15 +142,54 @@ function getTomorrowLocalISO() {
 }
 
 /**
- * Lee el archivo CSV con los datos de los clientes y filtra solo aquellos que tienen fecha de
- * mañana.
- * @param {*} csvPath
- * @returns Lista de clientes con fecha de mañana y sus datos necesarios para procesar el documento.
+ * Obtiene la fecha de hoy en formato ISO respecto a la zona horaria local.
+ * @returns Fecha de hoy en formato "YYYY-MM-DD".
  */
-function readTomorrow(csvPath) {
+function getTodayLocalISO() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Función que parsea los argumentos de la línea de comandos para determinar la fecha objetivo a procesar. Si se pasa el
+ * flag --today o -t, se procesa la fecha de hoy. Si se pasa el flag --custom o -c, se procesa la fecha personalizada
+ * indicada en formato dd-mm-yyyy. Si no se pasan flags, se procesa la fecha de mañana.
+ * @returns
+ */
+function parseTargetDate() {
+  const args = process.argv.slice(2);
+
+  if (args.includes("-t") || args.includes("--today")) {
+    return getTodayLocalISO();
+  }
+
+  const customFlagIndex = args.findIndex(a => a === "-c" || a === "--custom");
+  if (customFlagIndex !== -1) {
+    const rawDate = args[customFlagIndex + 1];
+    if (!rawDate || !/^\d{2}-\d{2}-\d{4}$/.test(rawDate)) {
+      console.error("Error: --custom/-c requires a date in dd-mm-yyyy format (e.g. 24-12-2025)");
+      process.exit(1);
+    }
+    const [day, month, year] = rawDate.split("-");
+    return `${year}-${month}-${day}`;
+  }
+
+  return getTomorrowLocalISO();
+}
+
+/**
+ * Lee el archivo CSV con los datos de los clientes y filtra solo aquellos que tienen la fecha indicada.
+ * @param {string} csvPath
+ * @param {string} targetDate Fecha en formato yyyy-mm-dd
+ * @returns Lista de clientes con la fecha indicada y sus datos necesarios para procesar el documento.
+ */
+function readTomorrow(csvPath, targetDate) {
   const raw = fs.readFileSync(path.join(__dirname, csvPath), "utf8");
   const lines = raw.trim().split("\n");
-  const tomorrow = getTomorrowLocalISO();
+  const tomorrow = targetDate;
 
   const results = [];
 
@@ -203,15 +226,13 @@ function readTomorrow(csvPath) {
 
   await login(page);
 
-  // TODO: Implementar fecha personalizada pasada como argumento por consola
-  const tomorrowClients = readTomorrow("output.csv");
+  const targetDate = parseTargetDate();
+  const tomorrowClients = readTomorrow("output.csv", targetDate);
 
   const progressBar = new cliProgress.SingleBar(
     {
       format:
-        "Progreso [" +
-        colors.cyan("{bar}") +
-        "] {percentage}% || {value}/{total} Documentos || ETA: {eta_formatted}",
+        "Progreso [" + colors.cyan("{bar}") + "] {percentage}% || {value}/{total} Documentos || ETA: {eta_formatted}",
       barCompleteChar: "\u2588",
       barIncompleteChar: "\u2591",
       hideCursor: true,
@@ -232,8 +253,8 @@ function readTomorrow(csvPath) {
   // Solo se combina la primera página de cada PDF
   const pdfs = fs
     .readdirSync(documentsDir)
-    .filter((file) => file.endsWith(".pdf"))
-    .map((file) => path.join(documentsDir, file));
+    .filter(file => file.endsWith(".pdf"))
+    .map(file => path.join(documentsDir, file));
 
   for (const pdf of pdfs) {
     await merger.add(pdf, 1);
