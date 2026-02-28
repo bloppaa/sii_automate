@@ -53,4 +53,6 @@ function generate(month, year, inputPath, outputPath) {
   fs.writeFileSync(outputPath, output);
 }
 
-generate(2, 2026, "clients.csv", "output.csv");
+// Obtener mes y año por argumentos de consola
+const [,, month, year] = process.argv;
+generate(Number(month), Number(year), "clients.csv", "output.csv");
