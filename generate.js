@@ -53,6 +53,6 @@ function generate(month, year, inputPath, outputPath) {
   fs.writeFileSync(outputPath, output);
 }
 
-// Obtener mes y año por argumentos de consola
-const [,, month, year] = process.argv;
+const now = new Date();
+const [,, month = now.getMonth() + 1, year = now.getFullYear()] = process.argv;
 generate(Number(month), Number(year), "clients.csv", "output.csv");
