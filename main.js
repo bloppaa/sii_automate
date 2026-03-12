@@ -51,8 +51,6 @@ async function executeWithRetry(fn, retries = 3, delay = 1000) {
  * @param {*} client Cliente con los datos necesarios para llenar el documento.
  */
 async function processDocument(page, context, client) {
-  // A veces el sitio del SII puede ser inestable, por lo que se implementa un mecanismo de reintentos para el llenado
-  // del formulario
   await executeWithRetry(() => fillDocument(page, client));
   await signDocument(page);
   await downloadDocument(page, context, client);
@@ -72,8 +70,6 @@ async function fillDocument(page, client) {
   const dvInput = page.locator('input[name="EFXP_DV_RECEP"]');
   await dvInput.fill(client.dv);
 
-  // Escuchar la respuesta a la solicitud que se hace al ingresar el RUT del cliente. Una vez que llega la respuesta se
-  // reemplazan ciertos datos, por lo que hay que esperar a que llegue antes de continuar con el llenado del formulario.
   const responsePromise = page.waitForResponse(
     response => response.url().includes("mipeGenFacEx.cgi") && response.status() === 200,
     { timeout: 10000 },
@@ -82,7 +78,6 @@ async function fillDocument(page, client) {
   await dvInput.press("Enter");
   await responsePromise;
 
-  // Una vez que llega la respuesta se reemplazan los datos del cliente
   await page.locator('select[name="cbo_dia_boleta"]').selectOption(client.dia);
   await page.locator('select[name="cbo_mes_boleta"]').selectOption(client.mes);
   await page.locator('select[name="cbo_anio_boleta"]').selectOption(client.anio);
@@ -249,8 +244,6 @@ function readTomorrow(csvPath, targetDate) {
 
   await browser.close();
 
-  // Combina todos los PDFs descargados en un solo archivo "merged.pdf"
-  // Solo se combina la primera página de cada PDF
   const pdfs = fs
     .readdirSync(documentsDir)
     .filter(file => file.endsWith(".pdf"))
@@ -262,7 +255,6 @@ function readTomorrow(csvPath, targetDate) {
 
   await merger.save(path.join(__dirname, "merged.pdf"));
 
-  // Elimina los PDFs individuales después de combinarlos
   for (const file of fs.readdirSync(documentsDir)) {
     fs.unlinkSync(path.join(documentsDir, file));
   }
