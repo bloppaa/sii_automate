@@ -53,6 +53,25 @@ function generate(month, year, inputPath, outputPath) {
   fs.writeFileSync(outputPath, output);
 }
 
-const now = new Date();
-const [,, month = now.getMonth() + 1, year = now.getFullYear()] = process.argv;
-generate(Number(month), Number(year), "clients.csv", "output.csv");
+const [, , monthArg, yearArg] = process.argv;
+
+if (!monthArg || !yearArg) {
+  console.log("Uso: node generate.js <mes> <año>");
+  console.log("Ejemplo: node generate.js 4 2026");
+  process.exit(1);
+}
+
+const month = Number(monthArg);
+const year = Number(yearArg);
+
+if (!Number.isInteger(month) || month < 1 || month > 12) {
+  console.error("Error: el mes debe ser un número entre 1 y 12.");
+  process.exit(1);
+}
+
+if (!Number.isInteger(year) || year < 1) {
+  console.error("Error: el año debe ser un número válido.");
+  process.exit(1);
+}
+
+generate(month, year, "clients.csv", "output.csv");
