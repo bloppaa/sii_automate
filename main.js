@@ -5,6 +5,9 @@ const cliProgress = require("cli-progress");
 const colors = require("colors");
 require("dotenv").config({ quiet: true });
 const documentsDir = path.join(__dirname, "documents");
+if (!fs.existsSync(documentsDir)) {
+  fs.mkdirSync(documentsDir, { recursive: true });
+}
 
 const LOGIN_URL =
   "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?" +
@@ -23,16 +26,49 @@ async function login(page) {
   await page.getByRole("button", { name: "Ingresar", exact: true }).click();
 }
 
+function formatRUT(rut) {
+  let cleanRUT = rut.replace(/[^0-9kK]/g, "").toUpperCase();
+
+  if (cleanRUT.length < 2) {
+    return cleanRUT;
+  }
+
+  let body = cleanRUT.slice(0, -1);
+  let dv = cleanRUT.slice(-1);
+
+  body = body.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+  return `${body}-${dv}`;
+}
+
 /**
  * Función principal que procesa cada documento: llena los datos, firma y descarga el PDF.
  * @param {*} page
  * @param {*} context
  * @param {*} client Cliente con los datos necesarios para llenar el documento.
  */
-async function processDocument(page, context, client) {
-  await fillDocument(page, client);
-  await signDocument(page);
-  await downloadDocument(page, context, client);
+async function processDocument(page, context, client, attempt = 1) {
+  const MAX_ATTEMPTS = 5;
+  try {
+    await fillDocument(page, client);
+    await signDocument(page);
+    await downloadDocument(page, context, client);
+  } catch (error) {
+    if (error.name === "TimeoutError" && attempt < MAX_ATTEMPTS) {
+      console.warn(
+        colors.yellow(
+          `\nTimeout en ${formatRUT(client.rut)} (${client.alias}). Reintentando... ${attempt}/${MAX_ATTEMPTS}`,
+        ),
+      );
+      await processDocument(page, context, client, attempt + 1);
+    } else {
+      console.error(
+        `Error al procesar documento para el cliente ${client.rut}:`,
+        error,
+      );
+      process.exit(1);
+    }
+  }
 }
 
 /**
@@ -93,16 +129,10 @@ async function signDocument(page) {
  * @param {*} client
  */
 async function downloadDocument(page, context, client) {
-  const [newPage] = await Promise.all([
-    context.waitForEvent("page"),
-    page.getByRole("link", { name: "Ver Documento" }).click(),
-  ]);
-  await newPage.waitForLoadState("networkidle");
-  const pdfUrl = newPage.url();
-  const response = await newPage.request.get(pdfUrl);
-  const buffer = await response.body();
-  fs.writeFileSync(`${documentsDir}/${client.rut}.pdf`, buffer);
-  await newPage.close();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Ver Documento" }).click();
+  const download = await downloadPromise;
+  await download.saveAs(`${documentsDir}/${client.rut}.pdf`);
 }
 
 /**
@@ -205,9 +235,15 @@ function readTomorrow(csvPath, targetDate) {
   const { default: PDFMerger } = await import("pdf-merger-js");
   const merger = new PDFMerger();
 
-  const browser = await chromium.launch({ headless: false });
-  const context = await browser.newContext({ acceptDownloads: true });
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    acceptDownloads: true,
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  });
   const page = await context.newPage();
+
+  page.setDefaultTimeout(15000);
 
   await login(page);
 
