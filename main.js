@@ -253,9 +253,9 @@ function readTomorrow(csvPath, targetDate) {
   const progressBar = new cliProgress.SingleBar(
     {
       format:
-        "Progreso |" +
+        "Progreso " +
         colors.cyan("{bar}") +
-        "| {percentage}% || {value}/{total} Documentos || ETA: {eta_formatted}",
+        " {percentage}% || {value}/{total} Documentos || ETA: {eta_formatted}",
       barCompleteChar: "\u2588",
       barIncompleteChar: "\u2591",
       hideCursor: true,
