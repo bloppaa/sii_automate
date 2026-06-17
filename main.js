@@ -88,7 +88,7 @@ async function fillDocument(page, client) {
   const responsePromise = page.waitForResponse(
     (response) =>
       response.url().includes("mipeGenFacEx.cgi") && response.status() === 200,
-    { timeout: 5000 },
+    { timeout: 10000 },
   );
 
   await dvInput.press("Enter");
@@ -243,7 +243,7 @@ function readTomorrow(csvPath, targetDate) {
   });
   const page = await context.newPage();
 
-  page.setDefaultTimeout(5000);
+  page.setDefaultTimeout(10000);
 
   await login(page);
 
